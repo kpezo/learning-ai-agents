@@ -135,6 +135,23 @@ Each difficulty level has a defined number of hints available. Foundation level 
 
 - **FR-013**: System MUST identify the learner's struggle area (definition, process, relationship, or application) when providing scaffolding.
 
+#### Struggle Area Detection Algorithm (FR-013)
+
+The system identifies struggle area based on **question type failure patterns**:
+
+| If recent failures are mostly... | Detected Struggle Area |
+|----------------------------------|------------------------|
+| definition, recognition, true_false | `definition` |
+| explanation, comparison, cause_effect | `relationship` |
+| scenario, case_study, problem_solving | `application` |
+| breakdown, pattern_recognition | `process` |
+
+**Detection Logic**:
+1. Retrieve last 5 incorrect answers for the current concept
+2. Count occurrences of each question_type
+3. Map dominant question_type category to struggle_area
+4. If no clear pattern (tie or <3 records), default to `definition` (most foundational)
+
 - **FR-014**: System MUST persist difficulty history across quiz sessions for the same user.
 
 ### Key Entities

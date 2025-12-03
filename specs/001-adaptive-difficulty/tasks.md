@@ -27,7 +27,7 @@
 
 - [ ] T001 Create test directory structure: `tests/unit/`, `tests/integration/`, `tests/contract/`
 - [ ] T002 [P] Configure pytest fixtures for ADK ToolContext mocking in tests/conftest.py
-- [ ] T003 [P] Create difficulty level constants module in adk/difficulty_levels.py
+- [ ] T003 [P] Create difficulty level constants (DIFFICULTY_LEVELS dict) in adk/difficulty.py
 
 ---
 
@@ -76,6 +76,8 @@
 
 - [ ] T023 [US1] Implement calculate_performance_trend() function in adk/difficulty.py
 - [ ] T024 [US1] Implement calculate_difficulty_adjustment() function with increase/decrease/maintain logic in adk/difficulty.py
+- [ ] T024a [US1] Implement get_concept_complexity() helper to retrieve complexity (1-5) from ConceptStats in adk/difficulty.py
+- [ ] T024b [US1] Update calculate_difficulty_adjustment() to apply complexity modifier: effective_threshold = base_threshold * (complexity / 3.0) in adk/difficulty.py
 - [ ] T025 [US1] Implement _get_difficulty_level() tool function in adk/difficulty.py
 - [ ] T026 [US1] Implement _set_difficulty_level() tool function with session state in adk/difficulty.py
 - [ ] T027 [US1] Implement _record_performance() tool function with adjustment trigger in adk/difficulty.py
