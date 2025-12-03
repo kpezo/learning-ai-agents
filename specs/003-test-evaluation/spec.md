@@ -162,7 +162,7 @@ Developers can view test coverage metrics to identify which parts of the codebas
 
 - **SC-004**: CI pipeline provides test results within 5 minutes of code push.
 
-- **SC-005**: Zero false positives in unit tests - tests only fail when actual bugs are present.
+- **SC-005**: Unit tests are deterministic and isolated - running the same test multiple times produces identical results without external dependencies.
 
 - **SC-006**: New features are accompanied by tests, maintaining or improving coverage percentage.
 

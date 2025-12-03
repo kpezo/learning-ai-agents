@@ -61,25 +61,7 @@ Concept relationships are stored in a way that enables learners to explore conne
 
 ---
 
-### User Story 4 - Multi-Device Access (Priority: P3)
-
-A learner can access their learning progress from different devices. They start studying on their laptop, continue on their phone, and later review on a tablet - all with synchronized progress.
-
-**Why this priority**: Valuable for users with multiple devices but requires significant infrastructure. The learning system works fine on a single device.
-
-**Independent Test**: Can be tested by creating progress on one device and verifying it appears on another device after sync.
-
-**Acceptance Scenarios**:
-
-1. **Given** a learner completes a quiz on their laptop, **When** they open the app on their phone, **Then** their quiz history and mastery levels are synchronized.
-
-2. **Given** a learner is mid-session on their phone, **When** they open the laptop app, **Then** they see the session is in progress on another device and can choose to take over.
-
-3. **Given** both devices are offline and the learner makes progress on each, **When** connectivity is restored, **Then** changes are merged without losing data.
-
----
-
-### User Story 5 - Data Export and Backup (Priority: P3)
+### User Story 4 - Data Export and Backup (Priority: P3)
 
 Learners can export their complete learning history and import it elsewhere. This ensures they own their data and can migrate if needed.
 
@@ -101,7 +83,6 @@ Learners can export their complete learning history and import it elsewhere. Thi
 
 - What happens when storage is full? System warns the user before storage limit is reached and offers cleanup options for old data.
 - How does the system handle corrupted session data? System attempts recovery from last known good state and logs corruption for investigation.
-- What happens during sync conflicts (same data modified on two devices)? Most recent change wins with conflict notification; historical versions are preserved.
 - How does migration work from current SQLite to enhanced storage? Automated migration preserves all existing data with rollback capability.
 
 ## Requirements *(mandatory)*
@@ -124,21 +105,15 @@ Learners can export their complete learning history and import it elsewhere. Thi
 
 - **FR-008**: System MUST support pathfinding queries between concepts (shortest learning path).
 
-- **FR-009**: System MUST synchronize user data across multiple devices (when cloud storage is enabled).
+- **FR-009**: System MUST export all user data to a portable format.
 
-- **FR-010**: System MUST handle offline operation with sync on reconnection.
+- **FR-010**: System MUST import user data from exported files.
 
-- **FR-011**: System MUST resolve sync conflicts using last-write-wins with conflict logging.
+- **FR-011**: System MUST handle version differences in exported data during import.
 
-- **FR-012**: System MUST export all user data to a portable format.
+- **FR-012**: System MUST migrate existing SQLite data to enhanced storage without data loss.
 
-- **FR-013**: System MUST import user data from exported files.
-
-- **FR-014**: System MUST handle version differences in exported data during import.
-
-- **FR-015**: System MUST migrate existing SQLite data to enhanced storage without data loss.
-
-- **FR-016**: System MUST provide rollback capability if migration fails.
+- **FR-013**: System MUST provide rollback capability if migration fails.
 
 ### Key Entities
 
@@ -149,8 +124,6 @@ Learners can export their complete learning history and import it elsewhere. Thi
 - **ConceptNode**: A concept in the knowledge graph with attributes like name, difficulty, learning time, and mastery status.
 
 - **ConceptRelationship**: A relationship between two concepts including type (prerequisite, enables, etc.), strength, and directionality.
-
-- **SyncState**: Per-device sync metadata including last sync time, pending changes, and conflict log.
 
 - **DataExport**: A complete export of user data including sessions, memories, mastery, and metadata.
 
@@ -164,19 +137,14 @@ Learners can export their complete learning history and import it elsewhere. Thi
 
 - **SC-003**: Knowledge graph queries (prerequisites, paths) return results in under 500ms for graphs with up to 500 concepts.
 
-- **SC-004**: Multi-device sync completes within 5 seconds for typical data volumes.
+- **SC-004**: Zero data loss during migration from current SQLite storage.
 
-- **SC-005**: Zero data loss during migration from current SQLite storage.
-
-- **SC-006**: Data exports can be imported successfully in 100% of cases for same-version exports.
-
-- **SC-007**: Semantic memory improves learner satisfaction scores by 20% (measured via feedback).
+- **SC-005**: Data exports can be imported successfully in 100% of cases for same-version exports.
 
 ## Assumptions
 
 - Session persistence builds on the existing SQLite infrastructure with additional tables.
-- Semantic memory uses vector embeddings for efficient retrieval (implementation detail left to planning).
-- Knowledge graph storage may use a graph database or graph-optimized SQLite schema.
-- Cloud sync requires user authentication (OAuth or email-based - to be determined in planning).
-- Multi-device sync is an optional feature; single-device mode works without cloud connectivity.
+- Semantic memory uses ADK's MemoryService for cross-session knowledge retention.
+- Knowledge graph uses SQLite with recursive CTEs for relationship queries.
+- Local-only development: no cloud services, no multi-device sync, single Gemini API key.
 - Migration runs automatically on first startup after upgrade.

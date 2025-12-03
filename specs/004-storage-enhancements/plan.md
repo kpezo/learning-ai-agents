@@ -9,7 +9,7 @@ Enhance the existing SQLite-based storage system (`adk/storage.py`) to support:
 1. **Session Persistence**: Replace `InMemorySessionService` with `DatabaseSessionService` for conversation continuity
 2. **Semantic Memory**: Integrate ADK's `MemoryService` for cross-session knowledge retention with automatic consolidation
 3. **Knowledge Graph**: Extend existing `concept_relationships` table with graph query capabilities (prerequisites, learning paths)
-4. **Multi-Device Sync**: Cloud-based synchronization via Vertex AI Memory Bank (optional, production tier)
+4. **Data Export/Import**: Portable data format for backup and migration
 
 ## Technical Context
 
@@ -17,11 +17,11 @@ Enhance the existing SQLite-based storage system (`adk/storage.py`) to support:
 **Primary Dependencies**: google-adk (DatabaseSessionService, MemoryService, preload_memory, load_memory), SQLite3
 **Storage**: SQLite (existing via `adk/storage.py`) + ADK SessionService/MemoryService
 **Testing**: pytest, pytest-asyncio (existing from 003-test-evaluation)
-**Target Platform**: Local development (SQLite), Production (Vertex AI Memory Bank optional)
+**Target Platform**: Local development only (SQLite)
 **Project Type**: Single project (adk/ package structure)
 **Performance Goals**: Session restore < 2s for 100 messages (SC-001), Graph queries < 500ms for 500 concepts (SC-003)
-**Constraints**: Zero data loss during migration (SC-005), Offline-capable base functionality
-**Scale/Scope**: Single user local, multi-device cloud optional
+**Constraints**: Zero data loss during migration (SC-004), Local-only (no cloud services)
+**Scale/Scope**: Single user, single device, single Gemini API key
 
 ## Constitution Check
 

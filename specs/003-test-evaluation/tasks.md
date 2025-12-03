@@ -38,10 +38,10 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Create shared fixtures in tests/conftest.py: mock_retriever, test_storage (tmp_path based), mock_tool_context
+- [ ] T005 Create shared fixtures in tests/conftest.py: mock_retriever, test_storage (tmp_path based), mock_tool_context. Include docstrings documenting which external dependencies each fixture mocks (LLM API, retriever, storage)
 - [ ] T006 [P] Implement mock_retriever fixture returning SimpleRetriever with predefined chunks in tests/conftest.py
 - [ ] T007 [P] Implement test_storage fixture using tmp_path for isolated SQLite databases in tests/conftest.py
-- [ ] T008 [P] Implement mock_tool_context fixture simulating ADK ToolContext with session state in tests/conftest.py
+- [ ] T008 [P] Implement mock_tool_context fixture in tests/conftest.py: simulate ADK ToolContext with session state, mock LLM API calls to return predetermined responses (FR-014), include helper for configuring mock responses per test
 - [ ] T009 Add pytest markers configuration (unit, integration, evaluation, slow) in pyproject.toml
 
 **Checkpoint**: Foundation ready - unit test implementation can now begin
@@ -93,7 +93,8 @@
 - [ ] T031 [P] [US2] Create assessor_scenarios.json with 5 evaluation scenarios in tests/evaluation/evalsets/
 - [ ] T032 [P] [US2] Create curriculum_scenarios.json with 5 evaluation scenarios in tests/evaluation/evalsets/
 - [ ] T033 [US2] Create run_evaluation.py script to load evalsets and run scenarios in tests/evaluation/
-- [ ] T034 [US2] Implement scenario loader in run_evaluation.py: load JSON, validate against schema
+- [ ] T034 [US2] Implement scenario loader in run_evaluation.py: load JSON from evalsets/, validate against contracts/evaluation-scenario.schema.json
+- [ ] T034a [P] [US2] Create contracts/evaluation-scenario.schema.json defining required fields (input, expected_patterns, threshold)
 - [ ] T035 [US2] Implement pattern matching logic in run_evaluation.py: regex matching for expected_patterns
 - [ ] T036 [US2] Implement pass threshold calculation in run_evaluation.py: count matched patterns vs total
 - [ ] T037 [US2] Implement evaluation result reporting in run_evaluation.py: per-scenario and aggregate results
@@ -257,16 +258,16 @@ Task: "Create tests/unit/test_quiz_tools.py"
 
 ## Summary
 
-- **Total Tasks**: 71
+- **Total Tasks**: 72
 - **Phase 1 (Setup)**: 4 tasks
 - **Phase 2 (Foundational)**: 5 tasks
 - **Phase 3 (US1 - Unit Tests)**: 19 tasks
-- **Phase 4 (US2 - Evaluations)**: 11 tasks
+- **Phase 4 (US2 - Evaluations)**: 12 tasks
 - **Phase 5 (US3 - CI)**: 9 tasks
 - **Phase 6 (US4 - Tool Tests)**: 9 tasks
 - **Phase 7 (US5 - Coverage)**: 7 tasks
 - **Phase 8 (Polish)**: 7 tasks
-- **Parallel opportunities**: 29 tasks marked [P]
+- **Parallel opportunities**: 30 tasks marked [P]
 - **Suggested MVP**: Complete through User Story 2 (Phase 4)
 
 ---
