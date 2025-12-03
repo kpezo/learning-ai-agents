@@ -35,11 +35,13 @@ class SimpleRetriever:
 def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
     chunks = []
     start = 0
+    # Ensure overlap doesn't exceed chunk_size to prevent infinite loops
+    effective_overlap = min(overlap, chunk_size - 1) if chunk_size > 0 else 0
     while start < len(text):
         end = start + chunk_size
         chunk = text[start:end]
         chunks.append(chunk)
-        start = end - overlap
+        start = end - effective_overlap
     return chunks
 
 

@@ -62,28 +62,15 @@ def test_storage(tmp_path):
     Notes:
         - Database is automatically cleaned up after test
         - Each test gets a fresh, isolated database
-        - Original DATA_DIR environment variable is restored after test
+        - Uses explicit db_path to avoid module-level DATA_DIR caching issues
     """
-    # Save original DATA_DIR
-    original_data_dir = os.environ.get("DATA_DIR")
+    # Create temporary database path (unique per test via tmp_path)
+    test_db_path = tmp_path / "test_user.db"
 
-    # Create temporary database directory
-    test_db_dir = tmp_path / "test_data"
-    test_db_dir.mkdir(parents=True, exist_ok=True)
-
-    # Set temporary DATA_DIR for this test
-    os.environ["DATA_DIR"] = str(test_db_dir)
-
-    # Create storage service with test user
-    storage = StorageService(user_id="test_user")
+    # Create storage service with explicit db_path for proper isolation
+    storage = StorageService(user_id="test_user", db_path=test_db_path)
 
     yield storage
-
-    # Cleanup: restore original DATA_DIR
-    if original_data_dir:
-        os.environ["DATA_DIR"] = original_data_dir
-    elif "DATA_DIR" in os.environ:
-        del os.environ["DATA_DIR"]
 
 
 @pytest.fixture
