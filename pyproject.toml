@@ -37,6 +37,9 @@ omit = [
     "*/__pycache__/*",
     "*/site-packages/*",
     ".venv/*",
+    # Entry point / runner files (integration code, not unit testable)
+    "adk/run_*.py",
+    "adk/agent.py",
 ]
 
 [tool.coverage.report]
