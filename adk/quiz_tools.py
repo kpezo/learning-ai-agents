@@ -14,7 +14,7 @@ from google.adk.tools import FunctionTool
 from google.adk.tools.tool_context import ToolContext
 
 try:
-    from rag_setup import get_retriever  # type: ignore
+    from adk.rag_setup import get_retriever
 
     _retriever = get_retriever()
 except Exception:

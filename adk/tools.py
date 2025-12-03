@@ -10,8 +10,8 @@ from typing import Any, Dict
 from google.adk.tools import FunctionTool
 
 try:
-    # Reuse the LangChain-based retriever already defined in the repo.
-    from rag_setup import get_retriever  # type: ignore
+    # Reuse the retriever defined in the adk package.
+    from adk.rag_setup import get_retriever
 
     _retriever = get_retriever()
 except Exception:
