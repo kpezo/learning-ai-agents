@@ -203,3 +203,19 @@ progress = storage.export_progress()
 with open("user123_progress.json", "w") as f:
     json.dump(progress, f, indent=2)
 ```
+
+## Active Technologies
+- Python 3.11+ + google-adk, google-genai, pymupdf, python-dotenv (009-adk-implementation-guide)
+- SQLite via `adk/storage.py` (file-based, per-user databases) (009-adk-implementation-guide)
+- ADK DatabaseSessionService, MemoryService, preload_memory/load_memory tools (004-storage-enhancements)
+- SQLite recursive CTEs for knowledge graph queries (004-storage-enhancements)
+- reportlab, svglib, matplotlib for PDF report generation (002-pdf-reports)
+- pytest, pytest-cov, pytest-asyncio for testing (003-test-evaluation)
+- Python 3.11+ (existing project uses `google-adk`, `google-genai`, `pymupdf`, `python-dotenv`) + `google-adk` (SequentialAgent, LoopAgent, ParallelAgent, LlmAgent), Gemini model (007-multi-agent-orchestration)
+- SQLite via `adk/storage.py` for persistent user progress; ADK `InMemorySessionService` for session state (007-multi-agent-orchestration)
+
+## Recent Changes
+- 004-storage-enhancements: Added ADK DatabaseSessionService for session persistence, MemoryService for semantic memory, graph query functions
+- 003-test-evaluation: Added pytest, pytest-cov, pytest-asyncio for testing framework
+- 009-adk-implementation-guide: Added Python 3.11+ + google-adk, google-genai, pymupdf, python-dotenv
+- 002-pdf-reports: Added reportlab, svglib, matplotlib for PDF report generation
