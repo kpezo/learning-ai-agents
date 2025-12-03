@@ -8,15 +8,30 @@ Usage:
     python tests/evaluation/run_evaluation.py --agent tutor
     python tests/evaluation/run_evaluation.py --agent assessor --verbose
     python tests/evaluation/run_evaluation.py --threshold 0.9
+    python tests/evaluation/run_evaluation.py --mock  # Force mock mode (no API calls)
 """
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# Check if real LLM is available
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+USE_REAL_LLM = bool(GOOGLE_API_KEY)
+
+# Try to import Google GenAI for real LLM calls
+try:
+    from google import genai
+    from google.genai import types
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
+    USE_REAL_LLM = False
 
 # Color codes for terminal output
 class Colors:
@@ -71,18 +86,69 @@ def match_patterns(text: str, patterns: List[str]) -> tuple[int, int, List[str],
     return len(matched), len(patterns), matched, missing
 
 
-def run_scenario(scenario: Dict[str, Any], agent_name: str, verbose: bool = False) -> Dict[str, Any]:
+def get_agent_system_prompt(agent_name: str) -> str:
+    """Get the system prompt for a specific agent type."""
+    prompts = {
+        "tutor": """You are an educational tutor agent. Your role is to:
+- Help students learn programming concepts
+- Provide clear explanations with examples
+- Guide students through problems step-by-step
+- Adapt your explanations to the student's level
+- Be encouraging and supportive""",
+        "assessor": """You are an assessment agent. Your role is to:
+- Evaluate student understanding through questions
+- Provide constructive feedback on answers
+- Identify areas where students need more practice
+- Grade responses fairly and explain scoring""",
+        "curriculum_planner": """You are a curriculum planning agent. Your role is to:
+- Create personalized learning paths
+- Recommend topics based on student progress
+- Identify prerequisite knowledge gaps
+- Suggest appropriate difficulty levels"""
+    }
+    return prompts.get(agent_name, prompts["tutor"])
+
+
+def call_real_llm(prompt: str, agent_name: str) -> tuple[str, int]:
+    """
+    Call the real Google Gemini API.
+
+    Returns:
+        Tuple of (response_text, response_time_ms)
+    """
+    client = genai.Client(api_key=GOOGLE_API_KEY)
+
+    system_prompt = get_agent_system_prompt(agent_name)
+
+    start_time = time.time()
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-exp",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.7,
+            max_output_tokens=1024,
+        )
+    )
+
+    response_time_ms = int((time.time() - start_time) * 1000)
+    response_text = response.text if response.text else ""
+
+    return response_text, response_time_ms
+
+
+def run_scenario(scenario: Dict[str, Any], agent_name: str, verbose: bool = False, use_mock: bool = False) -> Dict[str, Any]:
     """
     Run a single evaluation scenario.
 
-    Note: This is a stub implementation. In production, this would:
-    1. Initialize ADK agent with specified name
-    2. Set up session state from scenario['setup'] if provided
-    3. Send scenario['input'] to agent
-    4. Capture response and tool calls
-    5. Match response against expected_patterns
-    6. Verify required_tool_calls were made
-    7. Check response_time against max_response_time_ms
+    When GOOGLE_API_KEY is set and --mock is not used:
+    1. Calls real Google Gemini API with agent-specific system prompt
+    2. Measures actual response time
+    3. Matches response against expected_patterns
+
+    In mock mode (no API key or --mock flag):
+    - Uses stub responses for testing the evaluation framework
 
     Returns:
         Dictionary with scenario results
@@ -93,14 +159,31 @@ def run_scenario(scenario: Dict[str, Any], agent_name: str, verbose: bool = Fals
         print(f"\n{Colors.OKCYAN}Running scenario: {scenario_id}{Colors.ENDC}")
         print(f"  Input: {scenario['input']}")
 
-    # Stub response for demonstration (in real implementation, call agent)
-    # This allows the evaluation framework to be tested before full agent integration
-    mock_response = f"This is a mock response for {scenario['input']}. " \
-                    f"It mentions {agent_name} concepts relevant to the query."
+    # Determine whether to use real LLM
+    use_real = USE_REAL_LLM and GENAI_AVAILABLE and not use_mock
+
+    if use_real:
+        try:
+            response_text, response_time_ms = call_real_llm(scenario['input'], agent_name)
+            if verbose:
+                print(f"  {Colors.OKBLUE}[Real LLM]{Colors.ENDC}")
+        except Exception as e:
+            if verbose:
+                print(f"  {Colors.WARNING}LLM call failed: {e}, falling back to mock{Colors.ENDC}")
+            response_text = f"This is a mock response for {scenario['input']}. " \
+                           f"It mentions {agent_name} concepts relevant to the query."
+            response_time_ms = 150
+    else:
+        # Mock response for testing framework without API calls
+        response_text = f"This is a mock response for {scenario['input']}. " \
+                       f"It mentions {agent_name} concepts relevant to the query."
+        response_time_ms = 150
+        if verbose:
+            print(f"  {Colors.WARNING}[Mock Mode]{Colors.ENDC}")
 
     # Match patterns
     expected_patterns = scenario.get("expected_patterns", [])
-    matched_count, total_patterns, matched, missing = match_patterns(mock_response, expected_patterns)
+    matched_count, total_patterns, matched, missing = match_patterns(response_text, expected_patterns)
 
     # Calculate pass threshold
     pass_threshold = scenario.get("pass_threshold", 0.8)
@@ -110,24 +193,26 @@ def run_scenario(scenario: Dict[str, Any], agent_name: str, verbose: bool = Fals
     result = {
         "scenario_id": scenario_id,
         "passed": passed,
-        "response": mock_response,
+        "response": response_text,
         "matched_patterns": matched,
         "missing_patterns": missing,
         "pattern_match_ratio": pattern_ratio,
         "pass_threshold": pass_threshold,
-        "response_time_ms": 150,  # Mock timing
+        "response_time_ms": response_time_ms,
+        "used_real_llm": use_real,
     }
 
     if verbose:
-        print(f"  Response: {mock_response[:100]}...")
+        print(f"  Response: {response_text[:150]}...")
         print(f"  Matched {matched_count}/{total_patterns} patterns ({pattern_ratio:.1%})")
+        print(f"  Response time: {response_time_ms}ms")
         if missing:
             print(f"  {Colors.WARNING}Missing patterns: {missing}{Colors.ENDC}")
 
     return result
 
 
-def run_evalset(evalset_path: Path, verbose: bool = False, threshold_override: Optional[float] = None) -> bool:
+def run_evalset(evalset_path: Path, verbose: bool = False, threshold_override: Optional[float] = None, use_mock: bool = False) -> bool:
     """
     Run all scenarios in an evaluation set.
 
@@ -142,16 +227,20 @@ def run_evalset(evalset_path: Path, verbose: bool = False, threshold_override: O
     agent_name = evalset["agent"]
     pass_threshold = threshold_override if threshold_override is not None else evalset.get("pass_threshold", 0.8)
 
+    # Determine LLM mode
+    llm_mode = "Mock" if use_mock or not USE_REAL_LLM else "Real LLM (Gemini)"
+
     print(f"\n{Colors.HEADER}{Colors.BOLD}{'=' * 70}{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}Evaluation Set: {evalset['name']} v{evalset['version']}{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}Agent: {agent_name}{Colors.ENDC}")
+    print(f"{Colors.HEADER}{Colors.BOLD}Mode: {llm_mode}{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}{'=' * 70}{Colors.ENDC}\n")
 
     scenarios = evalset["scenarios"]
     results = []
 
     for scenario in scenarios:
-        result = run_scenario(scenario, agent_name, verbose)
+        result = run_scenario(scenario, agent_name, verbose, use_mock)
         results.append(result)
 
         # Print individual scenario result
@@ -197,8 +286,21 @@ def main():
         type=float,
         help="Override pass threshold (0.0-1.0)"
     )
+    parser.add_argument(
+        "--mock",
+        action="store_true",
+        help="Force mock mode (no real LLM API calls)"
+    )
 
     args = parser.parse_args()
+
+    # Print LLM availability info
+    if args.verbose:
+        print(f"{Colors.OKCYAN}LLM Configuration:{Colors.ENDC}")
+        print(f"  GOOGLE_API_KEY set: {bool(GOOGLE_API_KEY)}")
+        print(f"  GenAI available: {GENAI_AVAILABLE}")
+        print(f"  Mock mode forced: {args.mock}")
+        print(f"  Will use real LLM: {USE_REAL_LLM and GENAI_AVAILABLE and not args.mock}")
 
     # Find evalsets directory
     evalsets_dir = Path(__file__).parent / "evalsets"
@@ -224,7 +326,7 @@ def main():
             print(f"{Colors.WARNING}Warning: Evalset file not found: {evalset_file}{Colors.ENDC}")
             continue
 
-        passed = run_evalset(evalset_file, args.verbose, args.threshold)
+        passed = run_evalset(evalset_file, args.verbose, args.threshold, args.mock)
         if not passed:
             all_passed = False
 
