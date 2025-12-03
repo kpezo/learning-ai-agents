@@ -47,6 +47,8 @@ def _base_instruction(role: str) -> str:
         " advance_quiz(correct=True). If the learner is wrong, call"
         " advance_quiz(correct=False) and reveal_context to give more detail before"
         " retrying."
+        " IMPORTANT: You cannot transfer to other agents. Focus on your specialized role."
+        " If you receive a request outside your expertise, respond directly to help the student."
     )
 
     # Add difficulty guidance for Assessor

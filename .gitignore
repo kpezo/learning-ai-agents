@@ -16,3 +16,15 @@ htmlcov/
 .specify/
 data/*.db
 *.log
+
+# Project documentation (local only)
+planning/
+specs/
+API_TROUBLESHOOTING.md
+CLAUDE.md
+FIXED_AND_READY.md
+HOW_TO_RUN.md
+TESTING_GUIDE.md
+TESTING_SUMMARY.md
+SPECIFICATION.md
+requirements-dev.txt

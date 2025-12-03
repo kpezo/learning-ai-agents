@@ -1,0 +1,81 @@
+{
+  "name": "assessor_agent_evaluation",
+  "version": "1.0.0",
+  "agent": "assessor",
+  "pass_threshold": 0.8,
+  "scenarios": [
+    {
+      "scenario_id": "prepare_quiz_on_topic",
+      "description": "Assessor prepares a quiz on specified topic",
+      "input": "Start a quiz on Python basics",
+      "expected_patterns": [
+        "quiz|assessment",
+        "question|problem",
+        "ready|start|begin"
+      ],
+      "required_tool_calls": ["prepare_quiz"],
+      "pass_threshold": 0.8
+    },
+    {
+      "scenario_id": "evaluate_answer_correct",
+      "description": "Assessor correctly evaluates a right answer",
+      "input": "Python is a programming language",
+      "expected_patterns": [
+        "correct|right|yes",
+        "good|well done"
+      ],
+      "setup": {
+        "session_state": {
+          "quiz:snippets": ["Python is a high-level programming language"],
+          "quiz:index": 0
+        }
+      },
+      "pass_threshold": 0.7
+    },
+    {
+      "scenario_id": "evaluate_answer_incorrect",
+      "description": "Assessor provides constructive feedback for wrong answer",
+      "input": "Python is a snake",
+      "expected_patterns": [
+        "not quite|incorrect|almost",
+        "actually|in fact",
+        "programming"
+      ],
+      "setup": {
+        "session_state": {
+          "quiz:snippets": ["Python is a programming language"],
+          "quiz:index": 0
+        }
+      },
+      "pass_threshold": 0.7
+    },
+    {
+      "scenario_id": "track_quiz_progress",
+      "description": "Assessor tracks and reports quiz progress",
+      "input": "How am I doing so far?",
+      "expected_patterns": [
+        "score|progress|correct",
+        "\\d+|question|answer"
+      ],
+      "setup": {
+        "session_state": {
+          "quiz:index": 2,
+          "quiz:correct": 1,
+          "quiz:total": 5
+        }
+      },
+      "pass_threshold": 0.7
+    },
+    {
+      "scenario_id": "provide_hint",
+      "description": "Assessor provides helpful hints when requested",
+      "input": "Can I get a hint?",
+      "expected_patterns": [
+        "hint|clue|tip",
+        "try|consider|think"
+      ],
+      "required_tool_calls": ["reveal_context"],
+      "pass_threshold": 0.7
+    }
+  ]
+}

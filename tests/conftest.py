@@ -1,17 +1,114 @@
+"""Shared pytest fixtures for testing the educational agent system.
+
+This module provides:
+- mock_retriever: SimpleRetriever with predefined chunks (mocks RAG system)
+- test_storage: Isolated SQLite database using tmp_path (mocks storage)
+- mock_tool_context: ADK ToolContext with mocked session state and LLM calls
+"""
+
+import os
 import pytest
-from unittest.mock import MagicMock
-from google.adk.tools.tool_context import ToolContext
+from pathlib import Path
+from typing import Any, Dict
+from unittest.mock import MagicMock, Mock
+
+# Import from adk modules
+from adk.rag_setup import SimpleRetriever, Document
+from adk.storage import StorageService
+
+try:
+    from google.adk.tools.tool_context import ToolContext
+    TOOL_CONTEXT_AVAILABLE = True
+except ImportError:
+    TOOL_CONTEXT_AVAILABLE = False
+
+
+@pytest.fixture
+def mock_retriever():
+    """Fixture providing a SimpleRetriever with predefined test content.
+
+    Mocks external dependencies: PDF loading, text extraction
+
+    Returns:
+        SimpleRetriever: Retriever with sample educational content
+    """
+    sample_chunks = [
+        "Python is a high-level programming language known for its readability and simplicity.",
+        "Variables in Python are dynamically typed, meaning you don't need to declare their type.",
+        "Functions in Python are defined using the 'def' keyword followed by the function name.",
+        "Loops allow you to repeat code multiple times. Python has 'for' and 'while' loops.",
+        "Conditional statements like 'if', 'elif', and 'else' control program flow.",
+        "Lists are ordered, mutable collections in Python, created with square brackets.",
+        "Dictionaries store key-value pairs and are created with curly braces.",
+        "Classes in Python define blueprints for creating objects with attributes and methods.",
+        "Exception handling using try/except blocks prevents program crashes.",
+        "Modules in Python are files containing Python code that can be imported.",
+    ]
+    return SimpleRetriever(chunks=sample_chunks)
+
+
+@pytest.fixture
+def test_storage(tmp_path):
+    """Fixture providing isolated SQLite database for testing.
+
+    Mocks external dependencies: Persistent storage, file system
+
+    Args:
+        tmp_path: pytest built-in fixture providing temporary directory
+
+    Returns:
+        StorageService: Storage instance with ephemeral database
+
+    Notes:
+        - Database is automatically cleaned up after test
+        - Each test gets a fresh, isolated database
+        - Original DATA_DIR environment variable is restored after test
+    """
+    # Save original DATA_DIR
+    original_data_dir = os.environ.get("DATA_DIR")
+
+    # Create temporary database directory
+    test_db_dir = tmp_path / "test_data"
+    test_db_dir.mkdir(parents=True, exist_ok=True)
+
+    # Set temporary DATA_DIR for this test
+    os.environ["DATA_DIR"] = str(test_db_dir)
+
+    # Create storage service with test user
+    storage = StorageService(user_id="test_user")
+
+    yield storage
+
+    # Cleanup: restore original DATA_DIR
+    if original_data_dir:
+        os.environ["DATA_DIR"] = original_data_dir
+    elif "DATA_DIR" in os.environ:
+        del os.environ["DATA_DIR"]
 
 
 @pytest.fixture
 def mock_tool_context():
     """
     Creates a mock ADK ToolContext for testing tools without real session state.
+
+    Mocks external dependencies: LLM API calls, ADK session state
     """
-    context = MagicMock(spec=ToolContext)
+    if TOOL_CONTEXT_AVAILABLE:
+        context = MagicMock(spec=ToolContext)
+    else:
+        context = MagicMock()
+
     context.state = {}
     context.session_id = "test_session_123"
     context.user_id = "test_user"
+
+    # Helper method to configure session state
+    def set_session_state(state_dict: Dict[str, Any]):
+        """Configure session state for this test."""
+        context.state.update(state_dict)
+
+    context.set_session_state = set_session_state
+
     return context
 
 

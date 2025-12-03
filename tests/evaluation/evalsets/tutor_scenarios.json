@@ -1,0 +1,64 @@
+{
+  "name": "tutor_agent_evaluation",
+  "version": "1.0.0",
+  "agent": "tutor",
+  "pass_threshold": 0.8,
+  "scenarios": [
+    {
+      "scenario_id": "explain_basic_concept",
+      "description": "Tutor explains a basic programming concept clearly",
+      "input": "Can you explain what a variable is in Python?",
+      "expected_patterns": [
+        "variable",
+        "store|contain|hold",
+        "value|data"
+      ],
+      "pass_threshold": 0.8
+    },
+    {
+      "scenario_id": "provide_examples",
+      "description": "Tutor provides concrete examples when explaining",
+      "input": "How do I use a for loop in Python?",
+      "expected_patterns": [
+        "for .* in",
+        "range|list|iterable",
+        "example|instance"
+      ],
+      "pass_threshold": 0.7
+    },
+    {
+      "scenario_id": "fetch_relevant_content",
+      "description": "Tutor retrieves content from knowledge base",
+      "input": "Tell me about Python functions",
+      "expected_patterns": [
+        "function",
+        "def |define",
+        "return"
+      ],
+      "required_tool_calls": ["fetch_info"],
+      "pass_threshold": 0.7
+    },
+    {
+      "scenario_id": "handle_unclear_question",
+      "description": "Tutor handles vague questions by asking for clarification",
+      "input": "I don't understand this",
+      "expected_patterns": [
+        "what|which|can you",
+        "specific|clarify|help",
+        "\\?"
+      ],
+      "pass_threshold": 0.6
+    },
+    {
+      "scenario_id": "encourage_learner",
+      "description": "Tutor provides encouraging feedback",
+      "input": "I'm struggling with Python. Is it too hard for me?",
+      "expected_patterns": [
+        "can|able|capable",
+        "practice|learn|improve",
+        "help|support|guide"
+      ],
+      "pass_threshold": 0.6
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "name": "curriculum_planner_evaluation",
+  "version": "1.0.0",
+  "agent": "curriculum_planner",
+  "pass_threshold": 0.8,
+  "scenarios": [
+    {
+      "scenario_id": "suggest_learning_path",
+      "description": "Planner suggests appropriate learning path",
+      "input": "I'm a complete beginner. What should I learn first in Python?",
+      "expected_patterns": [
+        "start|begin|first",
+        "basic|fundamental|introduction",
+        "variable|syntax|print"
+      ],
+      "pass_threshold": 0.7
+    },
+    {
+      "scenario_id": "identify_prerequisites",
+      "description": "Planner identifies prerequisite concepts",
+      "input": "I want to learn about classes in Python",
+      "expected_patterns": [
+        "first|before|prerequisite",
+        "function|variable|basic",
+        "understand|know|learn"
+      ],
+      "pass_threshold": 0.6
+    },
+    {
+      "scenario_id": "recommend_next_topic",
+      "description": "Planner recommends next topic based on progress",
+      "input": "I've mastered variables and functions. What's next?",
+      "expected_patterns": [
+        "next|continue|now",
+        "loop|list|data structure|class",
+        "ready|can|should"
+      ],
+      "pass_threshold": 0.7
+    },
+    {
+      "scenario_id": "create_lesson_plan",
+      "description": "Planner creates structured lesson plan",
+      "input": "Create a 5-lesson plan for learning Python basics",
+      "expected_patterns": [
+        "lesson|module|topic",
+        "1|2|3|4|5",
+        "variable|function|loop"
+      ],
+      "pass_threshold": 0.7
+    },
+    {
+      "scenario_id": "address_weak_areas",
+      "description": "Planner addresses learner's weak areas",
+      "input": "I keep making mistakes with loops. What should I do?",
+      "expected_patterns": [
+        "practice|exercise|review",
+        "loop",
+        "help|improve|understand"
+      ],
+      "pass_threshold": 0.7
+    }
+  ]
+}
