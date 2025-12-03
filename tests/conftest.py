@@ -206,3 +206,24 @@ def struggling_records():
         {"score": 0.40, "hints_used": 2, "difficulty_level": 3, "in_optimal_zone": False},
         {"score": 0.45, "hints_used": 3, "difficulty_level": 3, "in_optimal_zone": False},
     ]
+
+
+@pytest.fixture
+def sample_quiz_state():
+    """
+    Sample quiz state for testing quiz step functions.
+    """
+    return {
+        "quiz:prepared": True,
+        "quiz:topic": "Python Basics",
+        "quiz:snippets": [
+            "Python is a high-level programming language.",
+            "Variables store data values.",
+            "Functions are reusable blocks of code.",
+        ],
+        "quiz:index": 0,
+        "quiz:mistakes": 0,
+        "quiz:total_mistakes": 0,
+        "quiz:correct": 0,
+        "quiz:question_details": [],
+    }

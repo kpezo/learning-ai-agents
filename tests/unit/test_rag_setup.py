@@ -76,7 +76,8 @@ class TestChunkText:
         """Test chunking empty string"""
         chunks = _chunk_text("", chunk_size=100, overlap=10)
 
-        assert chunks == [""]
+        # Empty string produces no chunks
+        assert chunks == []
 
     def test_chunk_text_smaller_than_chunk_size(self):
         """Test text smaller than chunk size"""

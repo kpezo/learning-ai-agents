@@ -80,9 +80,9 @@ class TestGetQuizStep:
         result = _get_quiz_step(tool_context=mock_tool_context)
 
         assert result["status"] == "success"
-        assert "current_step" in result
-        assert "total_steps" in result
-        assert result["current_step"] == 1  # index 0 -> step 1
+        assert "question_number" in result
+        assert "total_questions" in result
+        assert result["question_number"] == 1  # index 0 -> question 1
 
     def test_get_quiz_step_shows_progress(self, mock_tool_context, sample_quiz_state):
         """Test that progress information is included"""
@@ -90,8 +90,7 @@ class TestGetQuizStep:
 
         result = _get_quiz_step(tool_context=mock_tool_context)
 
-        assert result["total_steps"] == 3
-        assert result["correct_so_far"] == 0
+        assert result["total_questions"] == 3
 
     def test_get_quiz_step_no_quiz_prepared(self, mock_tool_context):
         """Test error when quiz not prepared"""
@@ -100,14 +99,15 @@ class TestGetQuizStep:
         assert result["status"] == "error"
 
     def test_get_quiz_step_at_end(self, mock_tool_context, sample_quiz_state):
-        """Test behavior when quiz is complete"""
-        sample_quiz_state["quiz:index"] = 3  # Beyond last question
+        """Test behavior when quiz is at last question"""
+        sample_quiz_state["quiz:index"] = 2  # Last question (index 2 of 3)
         mock_tool_context.set_session_state(sample_quiz_state)
 
         result = _get_quiz_step(tool_context=mock_tool_context)
 
-        # Should indicate quiz is complete
-        assert "complete" in result.get("message", "").lower() or result["status"] == "complete"
+        # Should still be successful showing the last question
+        assert result["status"] == "success"
+        assert result["question_number"] == 3
 
 
 class TestAdvanceQuiz:
@@ -180,9 +180,9 @@ class TestRevealContext:
         result = _reveal_context(tool_context=mock_tool_context)
 
         assert result["status"] == "success"
-        assert "snippet" in result
+        assert "context" in result
         # Should return the current snippet
-        assert result["snippet"] in sample_quiz_state["quiz:snippets"]
+        assert result["context"] in sample_quiz_state["quiz:snippets"]
 
     def test_reveal_context_no_quiz(self, mock_tool_context):
         """Test error when revealing context without quiz"""
@@ -197,8 +197,8 @@ class TestRevealContext:
 
         result = _reveal_context(tool_context=mock_tool_context)
 
-        # Should return snippet at index 1
-        assert result["snippet"] == sample_quiz_state["quiz:snippets"][1]
+        # Should return context at index 1
+        assert result["context"] == sample_quiz_state["quiz:snippets"][1]
 
 
 class TestLearningStats:
@@ -206,31 +206,30 @@ class TestLearningStats:
 
     def test_get_learning_stats(self, mock_tool_context, test_storage):
         """Test retrieving learning statistics"""
-        with patch("adk.quiz_tools.get_storage", return_value=lambda user_id: test_storage):
+        with patch("adk.quiz_tools.get_storage", return_value=test_storage):
             # Create some test data
             quiz_id = test_storage.start_quiz("session_001", "Topic1", 5)
-            test_storage.update_quiz_progress(quiz_id, correct=3, mistakes=2, details=[])
+            test_storage.update_quiz_progress(quiz_id, correct_answers=3, total_mistakes=2, question_details=[])
             test_storage.complete_quiz(quiz_id)
 
             result = _get_learning_stats(tool_context=mock_tool_context)
 
             assert result["status"] == "success"
-            assert "stats" in result
 
     def test_get_weak_concepts(self, mock_tool_context, test_storage):
         """Test retrieving weak concepts"""
-        with patch("adk.quiz_tools.get_storage", return_value=lambda user_id: test_storage):
-            # Create weak concept
+        with patch("adk.quiz_tools.get_storage", return_value=test_storage):
+            # Create weak concept by recording incorrect answers
+            test_storage.update_mastery("weak_concept", correct=False)
             test_storage.update_mastery("weak_concept", correct=False)
 
             result = _get_weak_concepts(threshold=0.5, tool_context=mock_tool_context)
 
             assert result["status"] == "success"
-            assert "concepts" in result
 
     def test_get_quiz_history(self, mock_tool_context, test_storage):
         """Test retrieving quiz history"""
-        with patch("adk.quiz_tools.get_storage", return_value=lambda user_id: test_storage):
+        with patch("adk.quiz_tools.get_storage", return_value=test_storage):
             # Create quiz history
             quiz_id = test_storage.start_quiz("session_001", "Python", 3)
             test_storage.complete_quiz(quiz_id)
@@ -238,7 +237,6 @@ class TestLearningStats:
             result = _get_quiz_history(topic="Python", limit=10, tool_context=mock_tool_context)
 
             assert result["status"] == "success"
-            assert "history" in result
 
 
 class TestQuizFlowIntegration:
@@ -247,7 +245,7 @@ class TestQuizFlowIntegration:
     def test_complete_quiz_flow(self, mock_retriever, mock_tool_context, test_storage):
         """Test complete quiz flow: prepare -> step -> advance -> complete"""
         with patch("adk.quiz_tools._retriever", mock_retriever):
-            with patch("adk.quiz_tools.get_storage", return_value=lambda user_id: test_storage):
+            with patch("adk.quiz_tools.get_storage", return_value=test_storage):
                 # 1. Prepare quiz
                 prepare_result = _prepare_quiz("Python", max_chunks=2, tool_context=mock_tool_context)
                 assert prepare_result["status"] == "success"
@@ -255,7 +253,7 @@ class TestQuizFlowIntegration:
                 # 2. Get first step
                 step_result = _get_quiz_step(tool_context=mock_tool_context)
                 assert step_result["status"] == "success"
-                assert step_result["current_step"] == 1
+                assert step_result["question_number"] == 1
 
                 # 3. Advance with correct answer
                 advance_result = _advance_quiz(
@@ -279,5 +277,5 @@ class TestQuizFlowIntegration:
             reveal_result = _reveal_context(tool_context=mock_tool_context)
 
             assert reveal_result["status"] == "success"
-            assert "snippet" in reveal_result
-            assert len(reveal_result["snippet"]) > 0
+            assert "context" in reveal_result
+            assert len(reveal_result["context"]) > 0

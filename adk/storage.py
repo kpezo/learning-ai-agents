@@ -48,6 +48,11 @@ class ConceptMastery:
     times_correct: int = 0
     last_seen: str = ""
     knowledge_type: str = ""  # declarative/procedural/conditional
+    avg_difficulty_achieved: float = 3.0
+    max_difficulty_achieved: int = 1
+    difficulty_distribution: str = "{}"
+    struggle_area: Optional[str] = None
+    complexity: int = 3
 
 
 @dataclass
