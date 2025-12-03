@@ -431,6 +431,48 @@ Return full context for current quiz item (for struggling learners).
 }
 ```
 
+#### `get_learning_stats() -> dict`
+
+Return user's overall learning statistics from persistent storage.
+
+**Returns**:
+```python
+{
+    "status": "success",
+    "quizzes": {"total_quizzes": 10, "total_correct": 45, ...},
+    "mastery": {"concepts_seen": 20, "avg_mastery": 0.75, ...},
+    "gaps": {"total_gaps": 5, "active_gaps": 2}
+}
+```
+
+#### `get_weak_concepts(threshold: float = 0.5) -> dict`
+
+Return concepts below mastery threshold.
+
+**Returns**:
+```python
+{
+    "status": "success",
+    "weak_concepts": [
+        {"name": "quadratics", "mastery": 0.3, "times_seen": 5, "times_correct": 2}
+    ]
+}
+```
+
+#### `get_quiz_history(topic: str = "", limit: int = 10) -> dict`
+
+Return user's quiz history, optionally filtered by topic.
+
+**Returns**:
+```python
+{
+    "status": "success",
+    "history": [
+        {"id": 1, "topic": "algebra", "total_questions": 5, "correct_answers": 4, ...}
+    ]
+}
+```
+
 ### 5.3 Pipeline Tools
 
 #### `ingest_pdf(pdf_path: str | None = None, top_n: int = 20) -> dict`
@@ -492,7 +534,55 @@ class QuizState:
     mistakes: int                  # Mistakes on current question
 ```
 
-### 6.5 Knowledge Graph Schema (Proposed)
+### 6.5 Storage Data Models (`adk/storage.py`)
+
+```python
+@dataclass
+class QuizResult:
+    id: Optional[int]
+    user_id: str
+    session_id: str
+    topic: str
+    total_questions: int
+    correct_answers: int
+    total_mistakes: int
+    started_at: str                # ISO timestamp
+    completed_at: str
+    question_details: str          # JSON of per-question data
+
+@dataclass
+class ConceptMastery:
+    id: Optional[int]
+    user_id: str
+    concept_name: str
+    mastery_level: float           # 0.0 - 1.0
+    times_seen: int
+    times_correct: int
+    last_seen: str
+    knowledge_type: str            # declarative/procedural/conditional
+
+@dataclass
+class KnowledgeGap:
+    id: Optional[int]
+    user_id: str
+    concept_name: str
+    gap_type: str                  # missing/weak/misconception
+    identified_at: str
+    resolved_at: Optional[str]
+    related_concepts: str          # JSON array
+
+@dataclass
+class SessionLog:
+    id: Optional[int]
+    user_id: str
+    session_id: str
+    role: str                      # user/assistant/system
+    content: str
+    timestamp: str
+    agent_name: str
+```
+
+### 6.6 Knowledge Graph Schema (Proposed)
 
 From `planning/building-adaptive-quiz-agent-google-adk.md`:
 
@@ -758,14 +848,15 @@ eval/
 └── test_eval.py
 ```
 
-### 10.4 Persistent Storage
+### 10.4 Future Storage Enhancements
 
-**Current State**: All data in-memory, lost on restart.
+**Current State**: SQLite per-user databases in `./data/`
 
-**Needed**:
-- `DatabaseSessionService` for session persistence
-- `VertexAiMemoryBankService` for long-term memory
-- Knowledge graph database for concept relationships
+**Potential Enhancements**:
+- `DatabaseSessionService` for ADK session persistence (beyond quiz data)
+- `VertexAiMemoryBankService` for long-term semantic memory
+- Graph database (Neo4j) for complex concept relationship queries
+- Cloud-based storage (Firestore, CloudSQL) for multi-device sync
 
 ### 10.5 Production Deployment
 
@@ -874,3 +965,4 @@ async for event in runner.run_async(
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2025-12-03 | Claude | Initial specification |
+| 1.1 | 2025-12-03 | Claude | Added persistent SQLite storage, moved rag_setup to adk/ |
