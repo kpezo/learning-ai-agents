@@ -18,6 +18,9 @@ from adk.quiz_tools import (
     get_quiz_step_tool,
     prepare_quiz_tool,
     reveal_context_tool,
+    get_learning_stats_tool,
+    get_weak_concepts_tool,
+    get_quiz_history_tool,
 )
 
 
@@ -48,6 +51,9 @@ def _make_specialist(role: str, extra_tools: List = None) -> LlmAgent:
         get_quiz_step_tool,
         advance_quiz_tool,
         reveal_context_tool,
+        get_learning_stats_tool,
+        get_weak_concepts_tool,
+        get_quiz_history_tool,
         preload_memory,
     ]
     if extra_tools:
@@ -88,6 +94,9 @@ root_agent = Agent(
         get_quiz_step_tool,
         advance_quiz_tool,
         reveal_context_tool,
+        get_learning_stats_tool,
+        get_weak_concepts_tool,
+        get_quiz_history_tool,
         preload_memory,
     ],
     sub_agents=[tutor_agent, curriculum_planner_agent, assessor_agent],

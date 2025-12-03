@@ -20,6 +20,7 @@ cp .env.example .env
 # - GOOGLE_API_KEY (required for Gemini)
 # - PDF_PATH (path to educational content PDF, defaults to Intro.pdf)
 # - GEMINI_MODEL (optional, defaults to gemini-2.5-flash-lite)
+# - DATA_DIR (optional, defaults to ./data/ for persistent storage)
 ```
 
 ## Running the System
@@ -50,7 +51,7 @@ The system uses a **hierarchical delegation pattern**:
 - Session/memory services: `InMemorySessionService` and `InMemoryMemoryService` from ADK
 - Streaming events expose intermediate tool calls and agent steps
 
-### RAG System (`rag_setup.py`)
+### RAG System (`adk/rag_setup.py`)
 
 Simple keyword-based retrieval without external vector DB:
 - `SimpleRetriever`: Basic TF-like scoring on chunked text (500 char chunks, 50 char overlap)
@@ -61,15 +62,33 @@ Simple keyword-based retrieval without external vector DB:
 - `fetch_info(query)`: Returns relevant documents for a query
 - `get_quiz_source(topic, max_chunks)`: Returns labeled snippets for quiz generation
 
+### Persistent Storage (`adk/storage.py`)
+
+SQLite-based persistent storage for user learning progress:
+- **Location**: `./data/{user_id}.db` (configurable via `DATA_DIR` env var)
+- **Quiz Results**: Topic, scores, timestamps, per-question details
+- **Concept Mastery**: Tracks mastery level (0.0-1.0) per concept with times seen/correct
+- **Knowledge Gaps**: Identified weak areas with resolution tracking
+- **Session Logs**: Full conversation history per session
+- **Extracted Concepts**: Cached PDF concept extraction results
+- **Concept Relationships**: Cached relationship mappings between concepts
+
+Key classes:
+- `StorageService`: Main class with methods for all data operations
+- `get_storage(user_id)`: Factory function returning cached storage instance
+
 ### Quiz State Management (`adk/quiz_tools.py`)
 
-The system includes stateful quiz tools:
-- `prepare_quiz(topic)`: Initializes quiz session with retrieved content
+The system includes stateful quiz tools with persistent storage:
+- `prepare_quiz(topic)`: Initializes quiz session with retrieved content, records to DB
 - `get_quiz_step()`: Returns current question without advancing
-- `advance_quiz(correct: bool)`: Moves to next question if correct=True
-- `reveal_context(chunk_index)`: Shows source context after incorrect answers
+- `advance_quiz(correct, concept_name)`: Moves to next question, updates mastery tracking
+- `reveal_context()`: Shows source context after incorrect answers
+- `get_learning_stats()`: Returns overall user learning statistics
+- `get_weak_concepts(threshold)`: Returns concepts below mastery threshold
+- `get_quiz_history(topic, limit)`: Returns quiz history for user
 
-Quiz state is stored per-session in the session service and enforces sequential answering.
+Quiz state is stored per-session in ADK session service AND persisted to SQLite for cross-session analytics.
 
 ### Question Agent Pipeline (`adk/question_pipeline.py`)
 
@@ -81,7 +100,7 @@ Multi-agent concept extraction system:
 
 Agent prompts are loaded from `AgentsExplanations/agents/*.md` files.
 
-### Message Flow and Compaction (`adk/agent.py:98-105`)
+### Message Flow and Compaction (`adk/agent.py:106-113`)
 
 - Event-based compaction configured at App level
 - Automatically compacts event history at fixed intervals
@@ -89,7 +108,7 @@ Agent prompts are loaded from `AgentsExplanations/agents/*.md` files.
 
 ## Key Implementation Details
 
-### Supervisor Routing Logic (`adk/agent.py:72-94`)
+### Supervisor Routing Logic (`adk/agent.py:78-103`)
 
 - Root agent's instruction guides delegation: "Route tasks to the right specialist"
 - ADK framework handles actual routing via `sub_agents` parameter
@@ -100,6 +119,12 @@ Agent prompts are loaded from `AgentsExplanations/agents/*.md` files.
 - Uses ADK's built-in `InMemorySessionService`
 - Must call `create_session()` before first `runner.run_async()`
 - Session includes `app_name`, `user_id`, `session_id`
+
+### Persistent Storage Integration
+
+- Storage is automatically initialized per user_id
+- Quiz tools persist progress without explicit calls
+- Use `StorageService.export_progress()` to get JSON export of all user data
 
 ## Development Patterns
 
@@ -115,6 +140,7 @@ Agent prompts are loaded from `AgentsExplanations/agents/*.md` files.
 1. Define tool function in `adk/tools.py` or `adk/quiz_tools.py`
 2. Add to tools list in `_make_specialist()` and/or `root_agent`
 3. For stateful tools, access session via `ToolContext.session_id`
+4. For persistent data, use `get_storage(user_id)` from `adk/storage.py`
 
 ### Modifying Agent Prompts
 
@@ -122,20 +148,58 @@ Agent prompts are loaded from `AgentsExplanations/agents/*.md` files.
 
 **Question Pipeline**: Edit markdown prompt files in `AgentsExplanations/agents/`
 
+### Working with Storage
+
+```python
+from adk.storage import get_storage
+
+# Get storage for a user
+storage = get_storage("user123")
+
+# Record quiz progress
+quiz_id = storage.start_quiz("session_abc", "algebra", 5)
+storage.update_quiz_progress(quiz_id, correct=3, mistakes=2, details=[...])
+storage.complete_quiz(quiz_id)
+
+# Track concept mastery
+storage.update_mastery("quadratic_equations", correct=True)
+weak = storage.get_weak_concepts(threshold=0.5)
+
+# Get user stats
+stats = storage.get_user_stats()
+export = storage.export_progress()  # Full JSON export
+```
+
 ## Common Scenarios
 
 ### Changing the LLM Model
 
-Set `GEMINI_MODEL` env var or edit `_gemini_model()` in `adk/agent.py:24-27`
+Set `GEMINI_MODEL` env var or edit `_gemini_model()` in `adk/agent.py:27-30`
 
 ### Adjusting Compaction Thresholds
 
-Adjust `EventsCompactionConfig` parameters in `app` definition at `adk/agent.py:101-104`
+Adjust `EventsCompactionConfig` parameters in `app` definition at `adk/agent.py:109-112`
 
 ### Running with Different PDFs
 
 Set `PDF_PATH` environment variable to point to your educational content PDF. If not set, defaults to `Intro.pdf`.
 
+### Changing Storage Location
+
+Set `DATA_DIR` environment variable to change where user databases are stored. Defaults to `./data/`.
+
 ### Debugging Agent Decisions
 
 Use `LoggingPlugin` in runner (see `adk/run_dev.py:30`) to see streaming events including tool calls and intermediate responses
+
+### Exporting User Progress
+
+```python
+from adk.storage import get_storage
+import json
+
+storage = get_storage("user123")
+progress = storage.export_progress()
+with open("user123_progress.json", "w") as f:
+    json.dump(progress, f, indent=2)
+```

@@ -53,10 +53,10 @@ Build an intelligent tutoring system that:
 | Relationship Mapping | ✅ Implemented | Map concept relationships |
 | Question Generation | ✅ Implemented | Generate clarifying questions |
 | Stateful Quizzes | ✅ Implemented | Sequential quiz flow with hints |
-| RAG Retrieval | ❌ Missing | `rag_setup.py` not implemented |
+| RAG Retrieval | ✅ Implemented | `adk/rag_setup.py` with keyword-based retrieval |
 | Adaptive Difficulty | 📋 Designed | 6-level framework proposed |
 | PDF Reports | 📋 Designed | Export progress reports |
-| Persistent Storage | ❌ Missing | In-memory only |
+| Persistent Storage | ✅ Implemented | SQLite storage in `adk/storage.py` |
 
 ---
 
@@ -104,9 +104,13 @@ learning-ai-agents/
 │   ├── question_pipeline.py          # Sequential concept extraction
 │   ├── tools.py                      # RAG-backed tools
 │   ├── quiz_tools.py                 # Stateful quiz management
+│   ├── rag_setup.py                  # Simple keyword-based RAG retriever
+│   ├── storage.py                    # SQLite persistent storage
 │   ├── run_dev.py                    # Interactive development runner
 │   ├── requirements.txt              # ADK dependencies
 │   └── Intro.pdf                     # Sample educational content
+│
+├── data/                             # User data storage (SQLite DBs)
 │
 ├── AgentsExplanations/               # Agent specifications
 │   ├── agents/                       # Prompt templates
@@ -679,39 +683,27 @@ from google.genai import types
 
 ## 10. Known Gaps & Future Work
 
-### 10.1 Critical Missing Component
+### 10.1 Completed Components
 
-#### RAG System (`rag_setup.py`)
+#### RAG System (`adk/rag_setup.py`)
 
-**Status**: NOT IMPLEMENTED
+**Status**: ✅ IMPLEMENTED
 
-**Impact**: All RAG tools return error responses. Tutor and Assessor workflows are broken.
+Simple keyword-based retrieval:
+- `SimpleRetriever`: TF-like scoring on chunked text
+- `build_retriever(pdf_path)`: Creates retriever from PDF
+- `get_retriever()`: LRU-cached singleton
 
-**Required Implementation**:
+#### Persistent Storage (`adk/storage.py`)
 
-```python
-# Expected API in rag_setup.py
+**Status**: ✅ IMPLEMENTED
 
-class SimpleRetriever:
-    """Keyword-based retriever without external vector DB."""
-
-    def __init__(self, chunks: List[str]):
-        self.chunks = chunks
-
-    def get_relevant_documents(self, query: str) -> List[Document]:
-        """Return relevant chunks based on TF-like scoring."""
-        pass
-
-def build_retriever(pdf_path: str) -> SimpleRetriever:
-    """Extract text from PDF, chunk (500 chars, 50 overlap), return retriever."""
-    pass
-
-@lru_cache(maxsize=1)
-def get_retriever() -> SimpleRetriever:
-    """Cached singleton retriever."""
-    pdf_path = os.getenv("PDF_PATH", "Intro.pdf")
-    return build_retriever(pdf_path)
-```
+SQLite-based storage with tables for:
+- Quiz results with per-question details
+- Concept mastery tracking (0.0-1.0 levels)
+- Knowledge gaps with resolution tracking
+- Session conversation logs
+- Cached extracted concepts and relationships
 
 ### 10.2 Proposed Enhancements (from `planning/enhancements.md`)
 
