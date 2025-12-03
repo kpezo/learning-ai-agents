@@ -1,0 +1,7 @@
+# ADK stack for education agents
+google-adk
+opentelemetry-instrumentation-google-genai
+
+# Reuse existing RAG stack (LangChain/Qdrant/PyMuPDF) from the repo
+pymupdf
+python-dotenv
