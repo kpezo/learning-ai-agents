@@ -29,6 +29,12 @@ try:
 except Exception:
     get_storage = None
 
+try:
+    from adk.question_pipeline import ingest_pdf, concept_agent
+except Exception:
+    ingest_pdf = None
+    concept_agent = None
+
 
 QUIZ_SNIPPETS_KEY = "quiz:snippets"
 QUIZ_TOPIC_KEY = "quiz:topic"
@@ -89,6 +95,15 @@ def _prepare_quiz(
         tool_context.state[QUIZ_CORRECT_KEY] = 0
         tool_context.state[QUIZ_QUESTION_DETAILS_KEY] = []
 
+        # Initialize difficulty system
+        tool_context.state["difficulty:level"] = 3  # Default to Application level
+        tool_context.state["difficulty:history"] = []
+        tool_context.state["difficulty:scaffolding_active"] = False
+        tool_context.state["difficulty:hints_used_current"] = 0
+        tool_context.state["difficulty:consecutive_correct"] = 0
+        tool_context.state["difficulty:consecutive_incorrect"] = 0
+        tool_context.state["difficulty:last_adjustment"] = None
+
         # Persist to storage
         if get_storage:
             try:
@@ -97,6 +112,11 @@ def _prepare_quiz(
                 storage = get_storage(user_id)
                 quiz_id = storage.start_quiz(session_id, topic, len(snippets))
                 tool_context.state[QUIZ_ID_KEY] = quiz_id
+
+                # Try to restore last difficulty level from history
+                last_level = storage.get_last_difficulty_level()
+                if last_level:
+                    tool_context.state["difficulty:level"] = last_level
             except Exception:
                 pass  # Storage errors shouldn't break quiz flow
 
@@ -169,6 +189,25 @@ def _advance_quiz(
     )
     topic = tool_context.state.get(QUIZ_TOPIC_KEY, "") if tool_context else ""
 
+    # Record performance for difficulty adjustment
+    difficulty_adjustment = None
+    if tool_context:
+        try:
+            from adk.difficulty import _record_performance
+
+            score = 1.0 if correct else 0.0
+            perf_result = _record_performance(
+                score=score,
+                response_time_ms=0,  # Not tracked in current implementation
+                hints_used=0,  # Not tracked per-question yet
+                concept_name=concept_name or topic,
+                question_type="quiz_question",
+                tool_context=tool_context,
+            )
+            difficulty_adjustment = perf_result.get("difficulty_adjustment")
+        except Exception:
+            pass  # Difficulty tracking errors shouldn't break quiz flow
+
     if correct:
         # Record question result before advancing
         question_details.append(
@@ -197,6 +236,7 @@ def _advance_quiz(
         if get_storage:
             try:
                 user_id = _get_user_id(tool_context)
+                session_id = _get_session_id(tool_context)
                 storage = get_storage(user_id)
                 quiz_id = tool_context.state.get(QUIZ_ID_KEY)
 
@@ -209,6 +249,32 @@ def _advance_quiz(
                 # Update concept mastery if concept provided
                 if concept_name:
                     storage.update_mastery(concept_name, correct)
+
+                # Persist difficulty adjustment to storage
+                if difficulty_adjustment and difficulty_adjustment.get("type") != "maintain":
+                    storage.save_difficulty_adjustment(
+                        session_id=session_id,
+                        previous_level=difficulty_adjustment["previous_level"],
+                        new_level=difficulty_adjustment["new_level"],
+                        adjustment_type=difficulty_adjustment["type"],
+                        reason=difficulty_adjustment["reason"],
+                        triggered_by="answer",
+                        scaffolding_recommended=tool_context.state.get("difficulty:scaffolding_active", False),
+                    )
+
+                # Persist performance record
+                current_level = tool_context.state.get("difficulty:level", 3)
+                storage.save_performance_record(
+                    session_id=session_id,
+                    quiz_id=quiz_id,
+                    question_number=idx + 1 if not correct else idx,
+                    score=1.0 if correct else 0.0,
+                    response_time_ms=0,
+                    hints_used=0,
+                    difficulty_level=current_level,
+                    concept_tested=concept_name or topic,
+                    question_type="quiz_question",
+                )
             except Exception:
                 pass
 
@@ -225,7 +291,26 @@ def _advance_quiz(
         except Exception:
             pass
 
-    return {
+    # Include difficulty information in response
+    current_difficulty = tool_context.state.get("difficulty:level", 3) if tool_context else 3
+    scaffolding_active = tool_context.state.get("difficulty:scaffolding_active", False) if tool_context else False
+
+    # Get scaffolding hints if active
+    scaffolding_hints = None
+    if scaffolding_active and tool_context:
+        try:
+            from adk.scaffolding import _get_scaffolding
+
+            scaffolding_result = _get_scaffolding(tool_context=tool_context)
+            if scaffolding_result.get("status") == "success" and scaffolding_result.get("scaffolding_active"):
+                scaffolding_hints = {
+                    "struggle_area": scaffolding_result.get("struggle_area"),
+                    "hints": scaffolding_result.get("hints"),
+                }
+        except Exception:
+            pass  # Scaffolding errors shouldn't break quiz flow
+
+    result = {
         "status": "success",
         "done": done,
         "next_question_number": min(idx + 1, len(snippets)),
@@ -233,7 +318,18 @@ def _advance_quiz(
         "mistakes_on_current": mistakes,
         "total_correct": total_correct,
         "total_mistakes": total_mistakes,
+        "difficulty": {
+            "current_level": current_difficulty,
+            "adjusted": bool(difficulty_adjustment and difficulty_adjustment.get("type") != "maintain"),
+            "scaffolding_active": scaffolding_active,
+        },
     }
+
+    # Add scaffolding hints to response if active
+    if scaffolding_hints:
+        result["scaffolding"] = scaffolding_hints
+
+    return result
 
 
 def _reveal_context(tool_context: ToolContext = None) -> Dict[str, Any]:
@@ -332,6 +428,91 @@ def _get_quiz_history(
         return {"status": "error", "error_message": str(e)}
 
 
+def _extract_topics_from_pdf(
+    max_topics: int = 10, tool_context: ToolContext = None
+) -> Dict[str, Any]:
+    """Extract main topics/concepts from the PDF for quiz selection.
+
+    This uses the question pipeline to analyze the PDF and extract key concepts
+    that can be used as quiz topics.
+
+    Args:
+        max_topics: Maximum number of topics to return.
+        tool_context: ADK tool context.
+    """
+
+    if ingest_pdf is None:
+        return {
+            "status": "error",
+            "error_message": "Question pipeline not available. Check dependencies."
+        }
+
+    try:
+        # Get PDF passages
+        ingestion_result = ingest_pdf(top_n=20)
+        passages = ingestion_result.get("passages", [])
+
+        if not passages:
+            return {
+                "status": "error",
+                "error_message": "No content found in PDF."
+            }
+
+        # Extract key topics from passages using simple keyword extraction
+        # We'll look for frequently mentioned terms and concepts
+        from collections import Counter
+        import re
+
+        # Combine all passage texts
+        all_text = " ".join(p.get("text", "") for p in passages)
+
+        # Extract potential topics (capitalized phrases, 1-3 words)
+        # Simple heuristic: look for capitalized words/phrases that appear multiple times
+        words = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b', all_text)
+        word_counts = Counter(words)
+
+        # Also get important keywords from the text
+        # Remove common words and get frequent terms
+        common_words = {'The', 'This', 'That', 'These', 'Those', 'There', 'Here', 'Where', 'When', 'What', 'Which', 'Who', 'Why', 'How'}
+        topics = []
+
+        for word, count in word_counts.most_common(max_topics * 3):
+            if word not in common_words and count >= 2:
+                topics.append({
+                    "name": word,
+                    "frequency": count,
+                    "relevance_score": count / len(passages)
+                })
+
+        # Limit to max_topics
+        topics = topics[:max_topics]
+
+        if not topics:
+            # Fallback: extract first few sentences as topic areas
+            sentences = all_text.split('.')[:5]
+            topics = [
+                {
+                    "name": f"Topic {i+1}: {sent.strip()[:50]}...",
+                    "frequency": 1,
+                    "relevance_score": 1.0
+                }
+                for i, sent in enumerate(sentences) if sent.strip()
+            ]
+
+        return {
+            "status": "success",
+            "topics": topics,
+            "total_passages": len(passages),
+            "message": f"Extracted {len(topics)} topics from PDF. You can ask about any of these topics or specify your own."
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error_message": f"Failed to extract topics: {str(e)}"
+        }
+
+
 # FunctionTool wrappers
 prepare_quiz_tool = FunctionTool(func=_prepare_quiz)
 get_quiz_step_tool = FunctionTool(func=_get_quiz_step)
@@ -340,6 +521,7 @@ reveal_context_tool = FunctionTool(func=_reveal_context)
 get_learning_stats_tool = FunctionTool(func=_get_learning_stats)
 get_weak_concepts_tool = FunctionTool(func=_get_weak_concepts)
 get_quiz_history_tool = FunctionTool(func=_get_quiz_history)
+extract_topics_tool = FunctionTool(func=_extract_topics_from_pdf)
 
 __all__ = [
     "prepare_quiz_tool",
@@ -349,4 +531,5 @@ __all__ = [
     "get_learning_stats_tool",
     "get_weak_concepts_tool",
     "get_quiz_history_tool",
+    "extract_topics_tool",
 ]

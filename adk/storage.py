@@ -212,8 +212,74 @@ class StorageService:
                     UNIQUE(pdf_hash, source_concept, target_concept, relationship_type)
                 );
                 CREATE INDEX IF NOT EXISTS idx_rels_pdf ON concept_relationships(pdf_hash);
+
+                -- Performance records for difficulty decisions
+                CREATE TABLE IF NOT EXISTS performance_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    session_id TEXT NOT NULL,
+                    quiz_id INTEGER,
+                    question_number INTEGER NOT NULL,
+                    score REAL NOT NULL,
+                    response_time_ms INTEGER DEFAULT 0,
+                    hints_used INTEGER DEFAULT 0,
+                    difficulty_level INTEGER NOT NULL,
+                    concept_tested TEXT NOT NULL,
+                    question_type TEXT,
+                    in_optimal_zone INTEGER DEFAULT 0,
+                    timestamp TEXT NOT NULL,
+                    FOREIGN KEY (quiz_id) REFERENCES quiz_results(id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_perf_user ON performance_records(user_id);
+                CREATE INDEX IF NOT EXISTS idx_perf_session ON performance_records(session_id);
+                CREATE INDEX IF NOT EXISTS idx_perf_concept ON performance_records(concept_tested);
+
+                -- Difficulty adjustment history
+                CREATE TABLE IF NOT EXISTS difficulty_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    session_id TEXT NOT NULL,
+                    previous_level INTEGER NOT NULL,
+                    new_level INTEGER NOT NULL,
+                    adjustment_type TEXT NOT NULL,
+                    reason TEXT,
+                    triggered_by TEXT NOT NULL,
+                    scaffolding_recommended INTEGER DEFAULT 0,
+                    timestamp TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_diff_user ON difficulty_history(user_id);
+                CREATE INDEX IF NOT EXISTS idx_diff_session ON difficulty_history(session_id);
             """
             )
+            # Add columns to concept_mastery for difficulty tracking
+            self._migrate_concept_mastery()
+
+    def _migrate_concept_mastery(self):
+        """Add difficulty-related columns to concept_mastery table if they don't exist."""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+
+            # Check which columns exist
+            cursor.execute("PRAGMA table_info(concept_mastery)")
+            existing_columns = {row[1] for row in cursor.fetchall()}
+
+            # Add missing columns
+            columns_to_add = {
+                "avg_difficulty_achieved": "REAL DEFAULT 3.0",
+                "max_difficulty_achieved": "INTEGER DEFAULT 1",
+                "difficulty_distribution": "TEXT DEFAULT '{}'",
+                "struggle_area": "TEXT",
+                "complexity": "INTEGER DEFAULT 3"
+            }
+
+            for column_name, column_def in columns_to_add.items():
+                if column_name not in existing_columns:
+                    try:
+                        conn.execute(
+                            f"ALTER TABLE concept_mastery ADD COLUMN {column_name} {column_def}"
+                        )
+                    except sqlite3.OperationalError:
+                        pass  # Column already exists
 
     # =========================================================================
     # Quiz Results
@@ -571,6 +637,171 @@ class StorageService:
                 (pdf_hash,),
             ).fetchall()
             return [ConceptRelationship(**dict(row)) for row in rows]
+
+    # =========================================================================
+    # Performance Records (Adaptive Difficulty)
+    # =========================================================================
+
+    def save_performance_record(
+        self,
+        session_id: str,
+        quiz_id: Optional[int],
+        question_number: int,
+        score: float,
+        response_time_ms: int,
+        hints_used: int,
+        difficulty_level: int,
+        concept_tested: str,
+        question_type: str,
+    ) -> int:
+        """Save a performance record. Returns record ID."""
+        in_optimal_zone = 1 if 0.60 <= score <= 0.85 else 0
+        with self._get_conn() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO performance_records
+                (user_id, session_id, quiz_id, question_number, score,
+                 response_time_ms, hints_used, difficulty_level, concept_tested,
+                 question_type, in_optimal_zone, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    self.user_id,
+                    session_id,
+                    quiz_id,
+                    question_number,
+                    score,
+                    response_time_ms,
+                    hints_used,
+                    difficulty_level,
+                    concept_tested,
+                    question_type,
+                    in_optimal_zone,
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            return cursor.lastrowid
+
+    def get_recent_performance_records(
+        self, session_id: str, limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """Get recent performance records for a session."""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM performance_records
+                WHERE user_id = ? AND session_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+            """,
+                (self.user_id, session_id, limit),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_performance_by_concept(
+        self, concept_name: str, limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Get performance records for a specific concept."""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM performance_records
+                WHERE user_id = ? AND concept_tested = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """,
+                (self.user_id, concept_name, limit),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    # =========================================================================
+    # Difficulty Adjustment History
+    # =========================================================================
+
+    def save_difficulty_adjustment(
+        self,
+        session_id: str,
+        previous_level: int,
+        new_level: int,
+        adjustment_type: str,
+        reason: str,
+        triggered_by: str,
+        scaffolding_recommended: bool,
+    ) -> int:
+        """Save a difficulty adjustment record. Returns record ID."""
+        with self._get_conn() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO difficulty_history
+                (user_id, session_id, previous_level, new_level, adjustment_type,
+                 reason, triggered_by, scaffolding_recommended, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    self.user_id,
+                    session_id,
+                    previous_level,
+                    new_level,
+                    adjustment_type,
+                    reason,
+                    triggered_by,
+                    1 if scaffolding_recommended else 0,
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            return cursor.lastrowid
+
+    def get_difficulty_history(
+        self, session_id: Optional[str] = None, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """Get difficulty adjustment history."""
+        with self._get_conn() as conn:
+            if session_id:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM difficulty_history
+                    WHERE user_id = ? AND session_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                """,
+                    (self.user_id, session_id, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM difficulty_history
+                    WHERE user_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                """,
+                    (self.user_id, limit),
+                ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_last_difficulty_level(self, session_id: Optional[str] = None) -> Optional[int]:
+        """Get the last difficulty level for a user (optionally for a specific session)."""
+        with self._get_conn() as conn:
+            if session_id:
+                row = conn.execute(
+                    """
+                    SELECT new_level FROM difficulty_history
+                    WHERE user_id = ? AND session_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                """,
+                    (self.user_id, session_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT new_level FROM difficulty_history
+                    WHERE user_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                """,
+                    (self.user_id,),
+                ).fetchone()
+            return row[0] if row else None
 
     # =========================================================================
     # Summary / Stats

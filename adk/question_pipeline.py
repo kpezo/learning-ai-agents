@@ -18,8 +18,9 @@ from typing import Any, Dict, List
 from google.adk.agents import Agent, LlmAgent, SequentialAgent
 from google.adk.models.google_llm import Gemini
 from google.adk.tools import FunctionTool, AgentTool
+from google.genai.types import HttpRetryOptions
 
-from rag_setup import build_retriever
+from adk.rag_setup import build_retriever
 
 PROMPTS_DIR = Path("AgentsExplanations/agents")
 
@@ -47,7 +48,18 @@ ingest_pdf_tool = FunctionTool(
 @lru_cache(maxsize=1)
 def _model() -> Gemini:
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
-    return Gemini(model=model_name)
+
+    # Configure retry options for handling 503 "model overloaded" errors
+    retry_config = HttpRetryOptions(
+        attempts=5,              # Maximum number of retry attempts
+        initialDelay=1.0,        # Initial delay in seconds
+        maxDelay=60.0,           # Maximum delay in seconds
+        expBase=2.0,             # Exponential backoff base (2.0 = double each time)
+        jitter=0.1,              # Random jitter to avoid thundering herd (10%)
+        httpStatusCodes=[503]    # Retry on 503 (Service Unavailable) errors
+    )
+
+    return Gemini(model=model_name, retry_options=retry_config)
 
 
 # Instantiate agents with their prompts.

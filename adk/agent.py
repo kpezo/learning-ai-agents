@@ -21,7 +21,14 @@ from adk.quiz_tools import (
     get_learning_stats_tool,
     get_weak_concepts_tool,
     get_quiz_history_tool,
+    extract_topics_tool,
 )
+from adk.difficulty import (
+    get_difficulty_level_tool,
+    set_difficulty_level_tool,
+    record_performance_tool,
+)
+from adk.scaffolding import get_scaffolding_tool
 
 
 def _gemini_model() -> Gemini:
@@ -31,7 +38,7 @@ def _gemini_model() -> Gemini:
 
 
 def _base_instruction(role: str) -> str:
-    return (
+    base = (
         f"You are a {role} working with students."
         " Ground every response in the provided snippets or retrieved context."
         " Be concise and actionable."
@@ -41,6 +48,25 @@ def _base_instruction(role: str) -> str:
         " advance_quiz(correct=False) and reveal_context to give more detail before"
         " retrying."
     )
+
+    # Add difficulty guidance for Assessor
+    if role == "Assessor":
+        base += (
+            "\n\nADAPTIVE DIFFICULTY SYSTEM:"
+            " Before generating questions, call get_difficulty_level() to get the current"
+            " difficulty (1-6) and allowed question types. Generate questions ONLY from the"
+            " allowed types for that level:"
+            "\n- Level 1 (Foundation): definition, recognition, true_false"
+            "\n- Level 2 (Understanding): explanation, comparison, cause_effect"
+            "\n- Level 3 (Application): scenario, case_study, problem_solving"
+            "\n- Level 4 (Analysis): breakdown, pattern_recognition, critique"
+            "\n- Level 5 (Synthesis): design, integration, hypothesis"
+            "\n- Level 6 (Mastery): teach_back, edge_case, meta_cognition"
+            "\n\nThe difficulty adjusts automatically based on performance (advance_quiz handles this)."
+            " If scaffolding is active (indicated in get_difficulty_level), provide hints before questions."
+        )
+
+    return base
 
 
 def _make_specialist(role: str, extra_tools: List = None) -> LlmAgent:
@@ -54,6 +80,7 @@ def _make_specialist(role: str, extra_tools: List = None) -> LlmAgent:
         get_learning_stats_tool,
         get_weak_concepts_tool,
         get_quiz_history_tool,
+        extract_topics_tool,
         preload_memory,
     ]
     if extra_tools:
@@ -71,7 +98,15 @@ def _make_specialist(role: str, extra_tools: List = None) -> LlmAgent:
 # Specialists
 tutor_agent = _make_specialist("Tutor")
 curriculum_planner_agent = _make_specialist("Curriculum Planner")
-assessor_agent = _make_specialist("Assessor")
+assessor_agent = _make_specialist(
+    "Assessor",
+    extra_tools=[
+        get_difficulty_level_tool,
+        set_difficulty_level_tool,
+        record_performance_tool,
+        get_scaffolding_tool,
+    ]
+)
 
 
 # Root supervisor agent that can delegate to specialists via sub_agents.
@@ -97,6 +132,7 @@ root_agent = Agent(
         get_learning_stats_tool,
         get_weak_concepts_tool,
         get_quiz_history_tool,
+        extract_topics_tool,
         preload_memory,
     ],
     sub_agents=[tutor_agent, curriculum_planner_agent, assessor_agent],

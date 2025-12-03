@@ -5,3 +5,8 @@ opentelemetry-instrumentation-google-genai
 # Reuse existing RAG stack (LangChain/Qdrant/PyMuPDF) from the repo
 pymupdf
 python-dotenv
+
+# Testing framework (003-test-evaluation)
+pytest
+pytest-cov
+pytest-asyncio
